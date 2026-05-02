@@ -3,3 +3,6 @@ deployment.json
 /midnight-level-db
 /dist
 /contracts/managed
+.env
+.env.local
+.env.*.local

@@ -25,6 +25,12 @@ A minimal CLI project for compiling and deploying a **Compact** smart contract t
 npm install
 ```
 
+Create your env file:
+
+```bash
+cp .env.example .env
+```
+
 ## Compile the Contract
 
 The CLI expects compiled artifacts under `contracts/managed/contract/...`.
