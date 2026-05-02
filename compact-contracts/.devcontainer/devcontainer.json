@@ -1,0 +1,7 @@
+{
+  "name": "midnight-dev",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "postCreateCommand": "code --install-extension /tmp/compact.vsix && compact update 0.29.0"
+}

@@ -1,0 +1,22 @@
+pragma language_version >= 0.21.0;
+import CompactStandardLibrary;
+import "../compact-contracts/contracts/src/token/FungibleToken" prefix FungibleToken_;
+export { ZswapCoinPublicKey, ContractAddress, Either };
+constructor(
+  name_: Opaque<"string">,
+  symbol_: Opaque<"string">,
+  decimals_: Uint<8>,
+  initialSupply: Uint<128>
+) {
+  FungibleToken_initialize(name_, symbol_, decimals_);
+  const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+  FungibleToken__mint(owner, initialSupply);
+}
+
+export circuit transfer(to: Either<ZswapCoinPublicKey, ContractAddress>, amount: Uint<128>): Boolean {
+  return FungibleToken_transfer(to, amount);
+}
+
+export circuit mint(to: Either<ZswapCoinPublicKey, ContractAddress>, amount: Uint<128>): [] {
+  return FungibleToken__mint(to, amount);
+}
