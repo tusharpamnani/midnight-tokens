@@ -71,7 +71,7 @@ export async function deployFactory(seed: string) {
     .getBech32Address()
     .toString();
 
-  const providers = await createProviders(walletCtx);
+  const providers = await createProviders(walletCtx, factoryZkPath);
   const compiledFactory = await getFactoryCompiledContract(walletAddressString);
 
   const deployed = await deployContract(providers, {
@@ -106,7 +106,7 @@ export async function registerTokenInFactory(params: {
     .getBech32Address()
     .toString();
 
-  const providers = await createProviders(walletCtx);
+  const providers = await createProviders(walletCtx, factoryZkPath);
   const compiledFactory = await getFactoryCompiledContract(walletAddressString);
 
   const factory = await findDeployedContract(providers as any, {
@@ -135,7 +135,7 @@ export async function factoryTokenCount(params: { seed: string; factoryAddress: 
   const walletCtx = await createWallet(params.seed);
   await walletCtx.wallet.waitForSyncedState();
   const walletAddressString = walletCtx.unshieldedKeystore.getBech32Address().toString();
-  const providers = await createProviders(walletCtx);
+  const providers = await createProviders(walletCtx, factoryZkPath);
   const compiledFactory = await getFactoryCompiledContract(walletAddressString);
 
   const callData = await createUnprovenCallTx(providers as any, {
@@ -156,7 +156,7 @@ export async function factoryTokenAt(params: {
   const walletCtx = await createWallet(params.seed);
   await walletCtx.wallet.waitForSyncedState();
   const walletAddressString = walletCtx.unshieldedKeystore.getBech32Address().toString();
-  const providers = await createProviders(walletCtx);
+  const providers = await createProviders(walletCtx, factoryZkPath);
   const compiledFactory = await getFactoryCompiledContract(walletAddressString);
 
   const callData = await createUnprovenCallTx(providers as any, {
@@ -179,7 +179,7 @@ export async function factoryTokenMetadata(params: {
   const walletCtx = await createWallet(params.seed);
   await walletCtx.wallet.waitForSyncedState();
   const walletAddressString = walletCtx.unshieldedKeystore.getBech32Address().toString();
-  const providers = await createProviders(walletCtx);
+  const providers = await createProviders(walletCtx, factoryZkPath);
   const compiledFactory = await getFactoryCompiledContract(walletAddressString);
 
   const token = parseContractAddressHex(params.tokenAddress);

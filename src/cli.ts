@@ -27,11 +27,22 @@ function getDeployment() {
   return JSON.parse(fs.readFileSync('deployment.json', 'utf-8'));
 }
 
+function readFlagValue(args: string[], flag: string) {
+  const idx = args.indexOf(flag);
+  if (idx === -1) return { value: null as string | null, args };
+  const value = args[idx + 1];
+  const nextArgs = args.slice(0, idx).concat(args.slice(idx + 2));
+  return { value: value ?? null, args: nextArgs };
+}
+
 async function main() {
   ensureCompiledArtifacts();
 
-  const args = process.argv.slice(2);
+  let args = process.argv.slice(2);
   const command = args[0];
+  const tokenFlag = readFlagValue(args, '--token');
+  args = tokenFlag.args;
+  const tokenOverride = tokenFlag.value;
 
   if (!command) {
     console.log(`
@@ -48,6 +59,7 @@ Commands:
   transfer <to> <amount>        Transfer fungible tokens
   balance-of <account>          Query token balance
   total-supply                  Query total token supply
+  (use --token <addressHex> to target a specific token)
   deploy-factory                Deploy token registry ("factory")
   factory-count <factory>       Query factory token count
   factory-token-at <factory> <i>  Get token at index
@@ -113,10 +125,11 @@ Recipient format:
         const deployment = getDeployment();
         const seed = process.env.WALLET_SEED || deployment.seed;
         const amount = BigInt(amountStr);
+        const contractAddress = tokenOverride || deployment.contractAddress;
 
         await mintFungible({
           seed,
-          contractAddress: deployment.contractAddress,
+          contractAddress,
           to,
           amount,
         });
@@ -134,10 +147,11 @@ Recipient format:
         const deployment = getDeployment();
         const seed = process.env.WALLET_SEED || deployment.seed;
         const amount = BigInt(amountStr);
+        const contractAddress = tokenOverride || deployment.contractAddress;
 
         await transferFungible({
           seed,
-          contractAddress: deployment.contractAddress,
+          contractAddress,
           to,
           amount,
         });
@@ -153,10 +167,11 @@ Recipient format:
 
         const deployment = getDeployment();
         const seed = process.env.WALLET_SEED || deployment.seed;
+        const contractAddress = tokenOverride || deployment.contractAddress;
 
         await balanceOfFungible({
           seed,
-          contractAddress: deployment.contractAddress,
+          contractAddress,
           account,
         });
         break;
@@ -165,10 +180,11 @@ Recipient format:
       case 'total-supply': {
         const deployment = getDeployment();
         const seed = process.env.WALLET_SEED || deployment.seed;
+        const contractAddress = tokenOverride || deployment.contractAddress;
 
         await totalSupplyFungible({
           seed,
-          contractAddress: deployment.contractAddress,
+          contractAddress,
         });
         break;
       }
