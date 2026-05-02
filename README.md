@@ -71,11 +71,18 @@ Deployment metadata is written to `deployment.json`.
 ```bash
 npm run cli -- deploy
 npm run cli -- balance
+npm run cli -- wallet-info
+npm run cli -- mint <to> <amount>
+npm run cli -- transfer <to> <amount>
+npm run cli -- balance-of <account>
+npm run cli -- total-supply
 ```
 
 Notes:
 - `deploy` currently deploys a token with hardcoded parameters. Update `src/deploy.ts` to change name/symbol/decimals/initial supply.
 - `balance` reads from `local-state.json` (this repo currently only implements a basic local view).
+- `mint`/`transfer` expect a recipient in the format `coin:<64-hex>` (wallet coin public key) or `contract:<64-hex>` (contract address). Passing `<64-hex>` defaults to `coin:<64-hex>`.
+- `balance-of`/`total-supply` run the exported read-only circuits and print the returned `Uint<128>` value.
 
 ## Environment Variables
 

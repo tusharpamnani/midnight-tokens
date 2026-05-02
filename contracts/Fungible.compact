@@ -13,6 +13,15 @@ constructor(
   FungibleToken__mint(owner, initialSupply);
 }
 
+// Read-only helpers
+export circuit totalSupply(): Uint<128> {
+  return FungibleToken_totalSupply();
+}
+
+export circuit balanceOf(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
+  return FungibleToken_balanceOf(account);
+}
+
 export circuit transfer(to: Either<ZswapCoinPublicKey, ContractAddress>, amount: Uint<128>): Boolean {
   return FungibleToken_transfer(to, amount);
 }
