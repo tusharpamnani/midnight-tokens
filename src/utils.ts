@@ -28,7 +28,7 @@ import { ensureCompiledArtifacts } from './check-artifacts.js';
 // @ts-expect-error The SDK expects WebSocket on the global scope.
 globalThis.WebSocket = WebSocket;
 
-const NETWORK = (process.env.MIDNIGHT_NETWORK?.trim() || 'preprod').toLowerCase();
+const NETWORK = (process.env.MIDNIGHT_NETWORK?.trim() || 'undeployed').toLowerCase();
 
 const DEFAULTS =
   NETWORK === 'local'

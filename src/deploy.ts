@@ -23,7 +23,7 @@ export async function deploy(seed: string) {
   const deploymentInfo = {
     contractAddress,
     seed,
-    network: process.env.MIDNIGHT_NETWORK_ID?.trim() || 'preprod',
+    network: process.env.MIDNIGHT_NETWORK_ID?.trim() || 'undeployed',
     deployedAt: new Date().toISOString(),
   };
 

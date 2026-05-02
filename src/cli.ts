@@ -40,7 +40,7 @@ Commands:
   try {
     switch (command) {
       case 'deploy': {
-        const seed = process.env.WALLET_SEED || '0000000000000000000000000000000000000000000000000000000000000000'; // For testing or user has to set it
+        const seed = process.env.WALLET_SEED || '0000000000000000000000000000000000000000000000000000000000000001'; // For testing or user has to set it
         console.log(`Using seed starting with ${seed.substring(0, 4)}...`);
         await deploy(seed);
         break;
