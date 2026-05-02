@@ -1,96 +1,85 @@
-# Midnight NFT Launchpad | Multi-Contract ZK Foundry
+# Midnight Token Launchpad (Midnight / Compact)
 
-A professional, high-fidelity web application for deploying and managing **privacy-preserving NFT collections** on the **Midnight Network**. This project implements a fully functional **NFT Launchpad** that bridges a **Next.js Web UI** with the **Midnight.js SDK**, featuring an independent factory pattern for scalable minting.
+A minimal CLI project for compiling and deploying a **Compact** smart contract to the **Midnight** network using the **Midnight.js** SDK. The current contract in this repo is a **fungible token** (`contracts/Fungible.compact`).
 
-## 🌌 Overview
+## What’s Included
 
-Unlike standard NFTs on public chains, Midnight NFTs store their metadata and ownership in **Private Ledger State**. This application allows users to spawn their own independent NFT collections (factories) with custom supply caps and descriptions.
+- Compact contract source: `contracts/Fungible.compact`
+- Contract compilation scripts: `npm run compile` / `npm run compile:zk`
+- Proof server helper: `npm run start-proof-server` (Docker)
+- CLI entrypoint: `npm run cli -- <command>`
+- Local files written by the CLI:
+  - `deployment.json` (deployment info)
+  - `local-state.json` (local app state; used by `balance`)
 
-- **Multi-Contract Factories**: Deploy unique smart contract instances for every collection.
-- **Private Metadata**: Ownership and metadata are hidden from the public record; only hashes (Commitments) are stored on-chain.
-- **ZK Verification**: Owners use Zero-Knowledge proofs locally to "prove" they own their tokens without revealing identity.
-- **Circuit-Enforced Caps**: Supply limits are enforced directly within the ZK circuits, ensuring immutable scarcity.
-- **Global Registry**: A synchronized local state keeps track of all deployed collections and minted tokens.
+## Prerequisites
 
-## 🚀 Getting Started
+- Node.js 18+
+- Docker (for the proof server)
+- `compact` CLI available on your PATH (used by `npm run compile`)
+- Port `6300` free (proof server)
 
-### 1. Prerequisites
-
-- **Node.js 18+**
-- **Docker**: Required to run the Midnight Proof Server.
-- **Local Proof Server**: Ensure port `6300` is available.
-
-### 2. Environment Setup
-
-Clone and install dependencies for both the CLI and UI:
+## Setup
 
 ```bash
-# Install root/CLI dependencies
 npm install
-
-# Install UI dependencies
-cd ui
-npm install --legacy-peer-deps
 ```
 
-### 3. Start the ZK Infrastructure
+## Compile the Contract
 
-In a separate terminal, start the **Midnight Proof Server**:
+The CLI expects compiled artifacts under `contracts/managed/contract/...`.
 
 ```bash
-# From the root directory
+npm run compile
+```
+
+If you want ZK compilation enabled (slower):
+
+```bash
+npm run compile:zk
+```
+
+## Start the Proof Server
+
+In a separate terminal:
+
+```bash
 npm run start-proof-server
 ```
 
-## 🛠️ Running the Application
+## Deploy
 
-### Option A: The Web Dashboard (Recommended)
-
-Start the Next.js development server:
+Set your wallet seed (and optionally the network id) then deploy:
 
 ```bash
-cd ui
-npm run dev
+export WALLET_SEED="..."                 # required for real deployments
+export MIDNIGHT_NETWORK_ID="preprod"     # optional (default: preprod)
+
+npm run deploy
 ```
 
-Navigate to [http://localhost:3000](http://localhost:3000).
+Deployment metadata is written to `deployment.json`.
 
-- **Global Registry**: View all deployed collections across the network.
-- **Deploy Factory**: One-click "New Factory" triggers an on-chain deployment of the `collection.compact` contract.
-- **Collection Minting**: Select a collection to mint unique tokens with private metadata.
-- **ZK Inventory**: View your tokens and hidden metadata, with built-in ZK owner verification.
-
-### Option B: The CLI Tool
-
-For advanced interactions:
+## CLI Commands
 
 ```bash
-# From the root directory
-# 1. Deploy the base contract
 npm run cli -- deploy
-
-# 2. Create a new collection (name, description, supply cap)
-npm run cli -- create-collection "Moon Birds" "Private avian avatars" 1000
-
-# 3. Mint from a collection
-npm run cli -- mint-from-collection <CONTRACT_ADDRESS> "{\"rarity\": \"legendary\"}"
-
-# 4. View your private inventory
 npm run cli -- balance
 ```
 
-## 🏗️ Project Structure
+Notes:
+- `deploy` currently deploys a token with hardcoded parameters. Update `src/deploy.ts` to change name/symbol/decimals/initial supply.
+- `balance` reads from `local-state.json` (this repo currently only implements a basic local view).
 
-- `contracts/`: **Compact** smart contract logic (`collection.compact`).
-- `src/`: Core **Midnight.js SDK** implementation (wallet management, ZK-witness providers).
-- `ui/app/`: Next.js frontend featuring **React Server Actions** for backend synchronization.
-- `ui/hooks/`: Real-time state synchronization with the Midnight SDK backend.
-- `local-state.json`: The server-side registry for collections and private NFT metadata.
+## Environment Variables
 
-## 🔐 Security & Privacy
+- `WALLET_SEED`: wallet seed used by the CLI (recommended: set explicitly)
+- `MIDNIGHT_NETWORK_ID`: network id (defaults to `preprod`)
+- `PRIVATE_STATE_PASSWORD`: password for the local private state store (defaults to `Str0ng!MidnightLocal` if unset)
 
-- **Shielded State**: Metadata never leaves the secure environment in raw form. Only ZK proofs and commitments are submitted to the public network.
-- **Local Storage**: For this development environment, private state is managed locally. In production, this would be managed per-user via the Lace extension.
+## Project Structure
 
----
-*Built with Midnight SDK v0.22.x, Next.js 14, and Tailwind CSS.*# midnight-tokens
+- `contracts/`: Compact contract source
+- `contracts/managed/contract/`: generated artifacts from `compact compile`
+- `src/`: Midnight.js wallet + provider setup and the CLI implementation
+- `dist/`: compiled TypeScript output (`npm run build`)
