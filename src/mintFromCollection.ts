@@ -5,7 +5,6 @@ import {
   createWallet, 
   createProviders, 
   zkConfigPath,
-  CONFIG 
 } from './utils.js';
 import { addOwnedToken } from './state.js';
 import { toHex } from '@midnight-ntwrk/midnight-js-utils';

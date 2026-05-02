@@ -6,12 +6,15 @@
     "ui"
   ],
   "scripts": {
-    "compile": "compact compile --skip-zk contracts/Fungible.compact contracts/managed/contract",
-    "compile:zk": "compact compile contracts/Fungible.compact contracts/managed/contract",
+    "compile": "export PATH=\"$HOME/.local/bin:$PATH\" && compact compile --skip-zk contracts/Fungible.compact contracts/managed/contract",
+    "compile:zk": "export PATH=\"$HOME/.local/bin:$PATH\" && compact compile contracts/Fungible.compact contracts/managed/contract",
     "build": "tsc",
-    "deploy": "npm run cli -- deploy",
-    "start-proof-server": "docker run -p 6300:6300 midnightntwrk/proof-server:8.0.3 -- midnight-proof-server -v",
-    "cli": "npm run build && node dist/cli.js"
+    "deploy": "node --max-old-space-size=4096 dist/cli.js deploy",
+    "cli": "npm run build && npm run deploy",
+    "env:up": "docker compose up -d",
+    "env:down": "docker compose down",
+    "localnet:up": "npm run compile:zk && npm run env:up",
+    "deploy:local": "npm run build && MIDNIGHT_NETWORK=local npm run deploy"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
