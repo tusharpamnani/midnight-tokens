@@ -39,6 +39,12 @@ The CLI expects compiled artifacts under `contracts/managed/contract/...`.
 npm run compile
 ```
 
+Compile the factory (token registry) contract:
+
+```bash
+npm run compile:factory
+```
+
 If you want ZK compilation enabled (slower):
 
 ```bash
@@ -76,6 +82,12 @@ npm run cli -- mint <to> <amount>
 npm run cli -- transfer <to> <amount>
 npm run cli -- balance-of <account>
 npm run cli -- total-supply
+npm run cli -- deploy-factory
+npm run cli -- factory-register <factory> <token> <name> <symbol> <supply> [imageUri] [description]
+npm run cli -- factory-create-token <factory> <name> <symbol> <decimals> <supply> [imageUri] [description]
+npm run cli -- factory-count <factory>
+npm run cli -- factory-token-at <factory> <index>
+npm run cli -- factory-meta <factory> <token>
 ```
 
 Notes:
@@ -83,6 +95,7 @@ Notes:
 - `balance` reads from `local-state.json` (this repo currently only implements a basic local view).
 - `mint`/`transfer` expect a recipient in the format `coin:<64-hex>` (wallet coin public key) or `contract:<64-hex>` (contract address). Passing `<64-hex>` defaults to `coin:<64-hex>`.
 - `balance-of`/`total-supply` run the exported read-only circuits and print the returned `Uint<128>` value.
+- The on-chain "factory" is a registry that stores token metadata; Compact currently does not support contract-to-contract deployment/calls, so tokens are deployed by the CLI and then registered in the factory.
 
 ## Environment Variables
 

@@ -19,6 +19,22 @@ const generatedContractPath = path.resolve(
   'index.js',
 );
 
+const factorySourcePath = path.resolve(
+  __dirname,
+  '..',
+  'contracts',
+  'TokenFactory.compact',
+);
+const generatedFactoryPath = path.resolve(
+  __dirname,
+  '..',
+  'contracts',
+  'managed',
+  'factory',
+  'contract',
+  'index.js',
+);
+
 export function ensureCompiledArtifacts() {
   if (!fs.existsSync(contractSourcePath)) {
     throw new Error(
@@ -29,6 +45,20 @@ export function ensureCompiledArtifacts() {
   if (!fs.existsSync(generatedContractPath)) {
     throw new Error(
       'Missing compiled contract artifacts. Run `npm run compile` before `npm run build`, `npm run deploy`, or `npm run cli`.',
+    );
+  }
+}
+
+export function ensureFactoryArtifacts() {
+  if (!fs.existsSync(factorySourcePath)) {
+    throw new Error(
+      'Missing contracts/TokenFactory.compact. Restore the factory contract source before compiling.',
+    );
+  }
+
+  if (!fs.existsSync(generatedFactoryPath)) {
+    throw new Error(
+      'Missing compiled factory artifacts. Run `npm run compile:factory` before using factory commands.',
     );
   }
 }

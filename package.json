@@ -8,6 +8,9 @@
   "scripts": {
     "compile": "export PATH=\"$HOME/.local/bin:$PATH\" && compact compile --skip-zk contracts/Fungible.compact contracts/managed/contract",
     "compile:zk": "export PATH=\"$HOME/.local/bin:$PATH\" && compact compile contracts/Fungible.compact contracts/managed/contract",
+    "compile:factory": "export PATH=\"$HOME/.local/bin:$PATH\" && compact compile contracts/TokenFactory.compact contracts/managed/factory",
+    "compile:factory:skip-zk": "export PATH=\"$HOME/.local/bin:$PATH\" && compact compile --skip-zk contracts/TokenFactory.compact contracts/managed/factory",
+    "compile:all": "npm run compile:zk && npm run compile:factory",
     "build": "tsc",
     "deploy": "npm run build && node --max-old-space-size=4096 dist/cli.js deploy",
     "cli": "npm run build && node dist/cli.js",

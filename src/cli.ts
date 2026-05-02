@@ -10,6 +10,14 @@ import {
   transferFungible,
 } from './fungible.js';
 import { createWallet } from './utils.js';
+import {
+  deployFactory,
+  factoryTokenAt,
+  factoryTokenCount,
+  factoryTokenMetadata,
+  registerTokenInFactory,
+} from './factory.js';
+import { deployTokenWithArgs } from './token.js';
 
 function getDeployment() {
   if (!fs.existsSync('deployment.json')) {
@@ -40,6 +48,12 @@ Commands:
   transfer <to> <amount>        Transfer fungible tokens
   balance-of <account>          Query token balance
   total-supply                  Query total token supply
+  deploy-factory                Deploy token registry ("factory")
+  factory-count <factory>       Query factory token count
+  factory-token-at <factory> <i>  Get token at index
+  factory-meta <factory> <token>  Get stored token metadata (json)
+  factory-register <factory> <token> <name> <symbol> <supply> [imageUri] [description]
+  factory-create-token <factory> <name> <symbol> <decimals> <supply> [imageUri] [description]
 
 Recipient format:
   coin:<64-hex>                 Zswap coin public key (wallet)
@@ -70,6 +84,7 @@ Recipient format:
           ? getDeployment()
           : null;
         const seed =
+          process.env.WALLET_SEED ||
           deployment?.seed ||
           '0000000000000000000000000000000000000000000000000000000000000001';
 
@@ -154,6 +169,144 @@ Recipient format:
         await totalSupplyFungible({
           seed,
           contractAddress: deployment.contractAddress,
+        });
+        break;
+      }
+
+      case 'deploy-factory': {
+        const deployment = fs.existsSync('deployment.json')
+          ? getDeployment()
+          : null;
+        const seed =
+          process.env.WALLET_SEED ||
+          deployment?.seed ||
+          '0000000000000000000000000000000000000000000000000000000000000001';
+
+        const factoryAddress = await deployFactory(seed);
+        fs.writeFileSync(
+          'factory-deployment.json',
+          JSON.stringify(
+            {
+              factoryAddress,
+              seed,
+              network: process.env.MIDNIGHT_NETWORK_ID?.trim() || 'preprod',
+              deployedAt: new Date().toISOString(),
+            },
+            null,
+            2,
+          ),
+        );
+        console.log('Saved to factory-deployment.json');
+        break;
+      }
+
+      case 'factory-count': {
+        const factory = args[1];
+        if (!factory) {
+          console.error('Usage: npm run cli -- factory-count <factoryAddress>');
+          process.exit(1);
+        }
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        await factoryTokenCount({ seed, factoryAddress: factory });
+        break;
+      }
+
+      case 'factory-token-at': {
+        const factory = args[1];
+        const indexStr = args[2];
+        if (!factory || !indexStr) {
+          console.error('Usage: npm run cli -- factory-token-at <factoryAddress> <index>');
+          process.exit(1);
+        }
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        await factoryTokenAt({ seed, factoryAddress: factory, index: BigInt(indexStr) });
+        break;
+      }
+
+      case 'factory-meta': {
+        const factory = args[1];
+        const token = args[2];
+        if (!factory || !token) {
+          console.error('Usage: npm run cli -- factory-meta <factoryAddress> <tokenAddressHex>');
+          process.exit(1);
+        }
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        await factoryTokenMetadata({ seed, factoryAddress: factory, tokenAddress: token });
+        break;
+      }
+
+      case 'factory-register': {
+        const factory = args[1];
+        const token = args[2];
+        const name = args[3];
+        const symbol = args[4];
+        const supplyStr = args[5];
+        const imageUri = args[6] || '';
+        const description = args[7] || '';
+        if (!factory || !token || !name || !symbol || !supplyStr) {
+          console.error(
+            'Usage: npm run cli -- factory-register <factoryAddress> <tokenAddressHex> <name> <symbol> <supply> [imageUri] [description]',
+          );
+          process.exit(1);
+        }
+
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+
+        await registerTokenInFactory({
+          seed,
+          factoryAddress: factory,
+          tokenAddress: token,
+          name,
+          symbol,
+          imageUri,
+          description,
+          totalSupply: BigInt(supplyStr),
+        });
+        break;
+      }
+
+      case 'factory-create-token': {
+        const factory = args[1];
+        const name = args[2];
+        const symbol = args[3];
+        const decimalsStr = args[4];
+        const supplyStr = args[5];
+        const imageUri = args[6] || '';
+        const description = args[7] || '';
+        if (!factory || !name || !symbol || !decimalsStr || !supplyStr) {
+          console.error(
+            'Usage: npm run cli -- factory-create-token <factoryAddress> <name> <symbol> <decimals> <supply> [imageUri] [description]',
+          );
+          process.exit(1);
+        }
+
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        const decimals = BigInt(decimalsStr);
+        const supply = BigInt(supplyStr);
+
+        const tokenAddress = await deployTokenWithArgs({
+          seed,
+          name,
+          symbol,
+          decimals,
+          initialSupply: supply,
+        });
+
+        // tokenAddress is returned as hex string. Register expects 64 hex chars.
+        await registerTokenInFactory({
+          seed,
+          factoryAddress: factory,
+          tokenAddress: tokenAddress.replace(/^0x/i, ''),
+          name,
+          symbol,
+          imageUri,
+          description,
+          totalSupply: supply,
         });
         break;
       }
