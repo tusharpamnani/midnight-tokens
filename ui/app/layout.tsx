@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
-import { Inter, Outfit } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
+import Providers from "./providers";
 
 export const metadata: Metadata = {
   title: "Midnight Token Launchpad",
@@ -17,8 +14,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark scroll-smooth">
-      <body className={`${inter.variable} ${outfit.variable} font-sans bg-zinc-950 antialiased`}>
-        {children}
+      <body className="font-sans bg-zinc-950 antialiased">
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

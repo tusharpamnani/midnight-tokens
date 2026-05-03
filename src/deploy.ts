@@ -13,7 +13,7 @@ export async function deploy(seed: string) {
   console.log('Deploying contract (this may take 30-60 seconds)...');
   const deployed = await deployContract(providers, {
     compiledContract: getCompiledContract(new Uint8Array(32)),
-    args: ['MyCustomToken', 'MCT', 18n, 1_000_000n],
+    args: ['Nikku', 'NMT', 18n, 1_000_000n],
   });
 
   const contractAddress = deployed.deployTxData.public.contractAddress;

@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import WalletConnect from '../components/WalletConnect';
+import { useWallet } from '../hooks/useWallet';
 import {
   actionBalanceOf,
   actionDeployFactory,
@@ -48,6 +50,8 @@ function Card(props: {
 }
 
 export default function Home() {
+  const { isConnected: isWalletConnected, address: connectedAddress, coinPublicKey } = useWallet();
+
   const [deployment, setDeployment] = useState<any>(null);
   const [factoryDeployment, setFactoryDeployment] = useState<any>(null);
   const [walletInfo, setWalletInfo] = useState<{
@@ -92,7 +96,9 @@ export default function Home() {
     const [d, f, w] = await Promise.all([
       getDeployment(),
       getFactoryDeployment(),
-      actionWalletInfo().catch(() => ({ coinKey: null, address: null })),
+      isWalletConnected
+        ? Promise.resolve({ coinKey: coinPublicKey ?? null, address: connectedAddress ?? null })
+        : actionWalletInfo().catch(() => ({ coinKey: null, address: null })),
     ]);
     setDeployment(d);
     setFactoryDeployment(f);
@@ -114,16 +120,23 @@ export default function Home() {
 
   useEffect(() => {
     refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (walletInfo?.coinKey && !mintForm.to) {
-      setMintForm((v) => ({ ...v, to: `coin:${walletInfo.coinKey}` }));
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWalletConnected, connectedAddress, coinPublicKey]);
+
+  useEffect(() => {
+    const activeCoinKey = coinPublicKey ?? walletInfo?.coinKey ?? null;
+    if (activeCoinKey && !mintForm.to) {
+      setMintForm((v) => ({ ...v, to: `coin:${activeCoinKey}` }));
     }
-    if (walletInfo?.coinKey && !balanceAccount) {
-      setBalanceAccount(`coin:${walletInfo.coinKey}`);
+    if (activeCoinKey && !balanceAccount) {
+      setBalanceAccount(`coin:${activeCoinKey}`);
     }
-  }, [walletInfo, mintForm.to, balanceAccount]);
+  }, [coinPublicKey, walletInfo, mintForm.to, balanceAccount]);
 
   async function run(fn: () => Promise<any>) {
     setIsBusy(true);
@@ -161,8 +174,11 @@ export default function Home() {
               {process.env.NEXT_PUBLIC_NETWORK_LABEL || 'Local / Preprod'}
             </div>
           </div>
-          <div className="text-xs font-mono text-zinc-500">
-            {walletInfo?.address ? `Wallet: ${walletInfo.address}` : 'Wallet: (not loaded)'}
+          <div className="flex items-center gap-5">
+            <div className="text-xs font-mono text-zinc-500">
+              {connectedAddress || walletInfo?.address ? `Wallet: ${connectedAddress || walletInfo?.address}` : 'Wallet: (not connected)'}
+            </div>
+            <WalletConnect />
           </div>
         </div>
       </nav>
@@ -490,4 +506,3 @@ export default function Home() {
     </main>
   );
 }
-
