@@ -1,9 +1,9 @@
 import * as path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { WebSocket } from 'ws';
 import { Buffer } from 'buffer';
+import { cwd } from 'node:process';
 
-import type { Contract as CompactContract } from '@midnight-ntwrk/compact-js';
 import { CompiledContract } from '@midnight-ntwrk/compact-js';
 import { httpClientProofProvider } from '@midnight-ntwrk/midnight-js-http-client-proof-provider';
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
@@ -24,9 +24,11 @@ import {
 
 import { ensureCompiledArtifacts } from './check-artifacts.js';
 
-// Required for GraphQL subscriptions in Node.
-// @ts-expect-error The SDK expects WebSocket on the global scope.
-globalThis.WebSocket = WebSocket;
+// Setup WebSocket for Node
+globalThis.WebSocket = WebSocket as any;
+
+export const zkConfigPath = path.resolve(cwd(), 'contracts', 'managed');
+const MANAGED_CONTRACTS_DIR = zkConfigPath;
 
 const NETWORK = (process.env.MIDNIGHT_NETWORK?.trim() || 'undeployed').toLowerCase();
 
@@ -60,39 +62,44 @@ export const CONFIG = {
   proofServer: process.env.MIDNIGHT_PROOF_SERVER?.trim() || DEFAULTS.proofServer,
 } as const;
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const zkConfigPath = path.resolve(
-  __dirname,
-  '..',
-  'contracts',
-  'managed',
-  'contract',
-);
-
-type NFTModule = typeof import('../contracts/managed/contract/contract/index.js');
-type NFTContract = CompactContract<undefined>;
-
-const nftModulePromise = (async () => {
+async function getContractBundle(contractName: string) {
   ensureCompiledArtifacts();
-  return import(pathToFileURL(path.join(zkConfigPath, 'contract', 'index.js')).href) as Promise<NFTModule>;
-})();
-
-export const NFTContractModule = await nftModulePromise;
-
-const NFTContractCtor =
-  NFTContractModule.Contract as unknown as new (
-    witnesses: any,
-  ) => NFTContract;
-
-export function getCompiledContract() {
-  return CompiledContract.make(
-    'contract',
-    NFTContractCtor,
-  ).pipe(
-    CompiledContract.withCompiledFileAssets(zkConfigPath),
-  ) as any;
+  
+  let relativePath: string;
+  if (contractName === 'token') {
+    relativePath = path.join('contract', 'contract', 'index.js');
+  } else if (contractName === 'factory') {
+    relativePath = path.join('factory', 'contract', 'index.js');
+  } else {
+    throw new Error(`Unknown contract: ${contractName}`);
+  }
+  
+  const contractPath = pathToFileURL(path.join(MANAGED_CONTRACTS_DIR, relativePath)).href;
+  const module = await import(contractPath);
+  
+  if (!module.Contract || !module.witnesses) {
+    throw new Error(`Artifacts for '${contractName}' missing 'Contract' or 'witnesses' export.`);
+  }
+  return module;
 }
 
+export async function getCompiledContract(contractName: string = 'token') {
+  const { Contract, witnesses } = await getContractBundle(contractName);
+  
+  // 1. Extract 'make' as any to allow 3 arguments
+  const make = CompiledContract.make as any;
+  
+  // 2. Perform the make call, cast the result to 'any' immediately, 
+  // then call pipe. This prevents the TS compiler from trying to 
+  // validate the argument types inside .pipe()
+  return (make(
+    contractName,
+    Contract,
+    witnesses
+  ) as any).pipe(
+    CompiledContract.withCompiledFileAssets(path.join(MANAGED_CONTRACTS_DIR, contractName))
+  ) as any;
+}
 export function deriveKeys(seed: string) {
   const hdWallet = HDWallet.fromSeed(Buffer.from(seed, 'hex'));
   if (hdWallet.type !== 'seedOk') throw new Error('Invalid seed');
@@ -157,10 +164,7 @@ export async function createProviders(
 ) {
   const privateStatePassword = process.env.PRIVATE_STATE_PASSWORD?.trim();
   if (!privateStatePassword) {
-    throw new Error(
-      'Missing PRIVATE_STATE_PASSWORD. This repo uses the official encrypted Level private state provider, which requires a strong local encryption password even though the high-level hello-world docs do not mention it.\n' +
-        "Set it before running deploy or cli, for example:\nexport PRIVATE_STATE_PASSWORD='Str0ng!MidnightLocal'",
-    );
+    throw new Error('Missing PRIVATE_STATE_PASSWORD.');
   }
 
   const state = await walletCtx.wallet.waitForSyncedState();

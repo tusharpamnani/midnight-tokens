@@ -2,7 +2,6 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { fileURLToPath } from 'node:url';
 
-import { CompiledContract } from '@midnight-ntwrk/compact-js';
 import {
   createUnprovenCallTx,
   deployContract,
@@ -10,8 +9,7 @@ import {
 } from '@midnight-ntwrk/midnight-js-contracts';
 
 import { toHex } from '@midnight-ntwrk/midnight-js-utils';
-import { createProviders, createWallet } from './utils.js';
-import { ensureFactoryArtifacts } from './check-artifacts.js';
+import { createProviders, createWallet, getCompiledContract } from './utils.js';
 
 type ContractAddress = { bytes: Uint8Array };
 type ZswapCoinPublicKey = { bytes: Uint8Array };
@@ -42,24 +40,14 @@ function padBytes(spec: string, length: number) {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const factoryZkPath = path.resolve(__dirname, '..', 'contracts', 'managed', 'factory');
 
-async function getFactoryCompiledContract() {
-  ensureFactoryArtifacts();
-  const factoryModule = await import(
-    pathToFileURL(path.join(factoryZkPath, 'contract', 'index.js')).href
-  );
-
-  const FactoryCtor = factoryModule.Contract as any;
-  return CompiledContract.make('factory', FactoryCtor).pipe(
-    CompiledContract.withCompiledFileAssets(factoryZkPath),
-  ) as any;
-}
-
 export async function deployFactory(seed: string) {
   const walletCtx = await createWallet(seed);
   await walletCtx.wallet.waitForSyncedState();
 
   const providers = await createProviders(walletCtx, factoryZkPath);
-  const compiledFactory = await getFactoryCompiledContract();
+  
+  // FIXED: Using the async utility and passing 'factory' identifier
+  const compiledFactory = await getCompiledContract('factory');
 
   const deployed = await deployContract(providers, {
     compiledContract: compiledFactory,
@@ -90,7 +78,8 @@ export async function registerTokenInFactory(params: {
   await walletCtx.wallet.waitForSyncedState();
 
   const providers = await createProviders(walletCtx, factoryZkPath);
-  const compiledFactory = await getFactoryCompiledContract();
+  // FIXED: Using the async utility
+  const compiledFactory = await getCompiledContract('factory');
 
   const factory = await findDeployedContract(providers as any, {
     contractAddress: params.factoryAddress,
@@ -118,7 +107,8 @@ export async function factoryTokenCount(params: { seed: string; factoryAddress: 
   const walletCtx = await createWallet(params.seed);
   await walletCtx.wallet.waitForSyncedState();
   const providers = await createProviders(walletCtx, factoryZkPath);
-  const compiledFactory = await getFactoryCompiledContract();
+  // FIXED: Using the async utility
+  const compiledFactory = await getCompiledContract('factory');
 
   const callData = await createUnprovenCallTx(providers as any, {
     compiledContract: compiledFactory,
@@ -138,7 +128,8 @@ export async function factoryTokenAt(params: {
   const walletCtx = await createWallet(params.seed);
   await walletCtx.wallet.waitForSyncedState();
   const providers = await createProviders(walletCtx, factoryZkPath);
-  const compiledFactory = await getFactoryCompiledContract();
+  // FIXED: Using the async utility
+  const compiledFactory = await getCompiledContract('factory');
 
   const callData = await createUnprovenCallTx(providers as any, {
     compiledContract: compiledFactory,
@@ -160,7 +151,8 @@ export async function factoryTokenMetadata(params: {
   const walletCtx = await createWallet(params.seed);
   await walletCtx.wallet.waitForSyncedState();
   const providers = await createProviders(walletCtx, factoryZkPath);
-  const compiledFactory = await getFactoryCompiledContract();
+  // FIXED: Using the async utility
+  const compiledFactory = await getCompiledContract('factory');
 
   const token = parseContractAddressHex(params.tokenAddress);
 

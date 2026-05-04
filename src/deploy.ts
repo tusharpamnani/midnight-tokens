@@ -2,18 +2,29 @@ import * as fs from 'node:fs';
 import { deployContract } from '@midnight-ntwrk/midnight-js-contracts';
 import { createWallet, createProviders, getCompiledContract } from './utils.js';
 
-export async function deploy(seed: string) {
+export async function deploy(params: {
+  seed: string;
+  name: string;
+  symbol: string;
+  decimals: bigint;
+  initialSupply: bigint;
+  maxSupply: bigint;
+}) {
   console.log('Connecting and syncing wallet...');
-  const walletCtx = await createWallet(seed);
+  const walletCtx = await createWallet(params.seed);
   await walletCtx.wallet.waitForSyncedState();
 
   console.log('Setting up providers...');
   const providers = await createProviders(walletCtx);
 
+  // Load the token contract asynchronously
+  console.log('Compiling contract assets...');
+  const compiled = await getCompiledContract('token');
+
   console.log('Deploying contract (this may take 30-60 seconds)...');
   const deployed = await deployContract(providers, {
-    compiledContract: getCompiledContract(),
-    args: [],
+    compiledContract: compiled,
+    args: [params.name, params.symbol, params.decimals, params.initialSupply, params.maxSupply],
   });
 
   const contractAddress = deployed.deployTxData.public.contractAddress;
@@ -22,9 +33,10 @@ export async function deploy(seed: string) {
 
   const deploymentInfo = {
     contractAddress,
-    seed,
+    seed: params.seed,
     network: process.env.MIDNIGHT_NETWORK_ID?.trim() || 'undeployed',
     deployedAt: new Date().toISOString(),
+    schema: 'fungible-v1',
   };
 
   fs.writeFileSync('deployment.json', JSON.stringify(deploymentInfo, null, 2));

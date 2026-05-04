@@ -4,35 +4,54 @@ import CompactStandardLibrary;
 
 export { ZswapCoinPublicKey, ContractAddress, Either };
 
-// NOTE:
-// - Compact currently does NOT support contract-to-contract deployment/calls.
-// - This contract is a registry ("factory") that stores token metadata on-chain.
-// - Tokens themselves must be deployed off-chain (e.g. via this repo's CLI) and then registered here.
+// ---------------- STORAGE ----------------
 
+// Registry
 export ledger _tokenCount: Uint<64>;
 export ledger _tokenByIndex: Map<Uint<64>, ContractAddress>;
 
+export ledger _creator: Map<ContractAddress, ZswapCoinPublicKey>;
+export ledger _active: Map<ContractAddress, Boolean>;
+
+// Metadata
 export ledger _name: Map<ContractAddress, Bytes<32>>;
 export ledger _symbol: Map<ContractAddress, Bytes<16>>;
 export ledger _imageUri: Map<ContractAddress, Bytes<64>>;
 export ledger _description: Map<ContractAddress, Bytes<128>>;
-export ledger _creator: Map<ContractAddress, ZswapCoinPublicKey>;
 export ledger _totalSupply: Map<ContractAddress, Uint<128>>;
-export ledger _active: Map<ContractAddress, Boolean>;
+
+// Sale state
+export ledger _saleActive: Map<ContractAddress, Boolean>;
+export ledger _price: Map<ContractAddress, Uint<128>>;
+
+// Minimal analytics (safe)
+export ledger _buyers: Map<ContractAddress, Uint<64>>;
+
+// Platform
+export ledger _owner: ZswapCoinPublicKey;
+
+// ---------------- CONSTRUCTOR ----------------
 
 constructor() {
   _tokenCount = 0;
+  _owner = ownPublicKey();
 }
 
-export circuit tokenCount(): Uint<64> {
-  return _tokenCount;
+// ---------------- MODIFIERS ----------------
+
+circuit onlyCreator(token: ContractAddress): [] {
+  const key = disclose(token);
+  assert(_creator.lookup(key) == ownPublicKey(), "Not creator");
+  return [];
 }
 
-export circuit tokenAt(index: Uint<64>): ContractAddress {
-  const idx = disclose(index);
-  assert(_tokenByIndex.member(idx), "TokenFactory: index out of bounds");
-  return _tokenByIndex.lookup(idx);
+circuit tokenExists(token: ContractAddress): [] {
+  const key = disclose(token);
+  assert(_creator.member(key), "Token not registered");
+  return [];
 }
+
+// ---------------- REGISTER ----------------
 
 export circuit registerToken(
   token: ContractAddress,
@@ -43,20 +62,87 @@ export circuit registerToken(
   totalSupply: Uint<128>
 ): [] {
   const key = disclose(token);
-  assert(!_creator.member(key), "TokenFactory: token already registered");
 
+  assert(!_creator.member(key), "Already registered");
+
+  // store metadata
   _name.insert(key, disclose(name));
   _symbol.insert(key, disclose(symbol));
   _imageUri.insert(key, disclose(imageUri));
   _description.insert(key, disclose(description));
-  _creator.insert(key, ownPublicKey());
   _totalSupply.insert(key, disclose(totalSupply));
+
+  // ownership + state
+  _creator.insert(key, ownPublicKey());
   _active.insert(key, true);
 
-  _tokenByIndex.insert(_tokenCount, disclose(token));
+  // sale defaults
+  _saleActive.insert(key, false);
+  _price.insert(key, 0 as Uint<128>);
+  _buyers.insert(key, 0 as Uint<64>);
+
+  // index
+  _tokenByIndex.insert(_tokenCount, key);
   _tokenCount = _tokenCount + 1 as Uint<64>;
+
   return [];
 }
+
+// ---------------- SALE CONTROL ----------------
+
+export circuit startSale(
+  token: ContractAddress,
+  price: Uint<128>
+): [] {
+  const key = disclose(token);
+
+  tokenExists(token);
+  onlyCreator(token);
+
+  assert(_active.lookup(key), "Inactive token");
+  assert(!_saleActive.lookup(key), "Sale already active");
+  assert(price > 0, "Invalid price");
+
+  _price.insert(key, disclose(price));
+  _saleActive.insert(key, true);
+
+  return [];
+}
+
+export circuit endSale(token: ContractAddress): [] {
+  const key = disclose(token);
+
+  tokenExists(token);
+  onlyCreator(token);
+
+  assert(_saleActive.lookup(key), "Sale not active");
+
+  _saleActive.insert(key, false);
+
+  return [];
+}
+
+// ---------------- BUY RECORD (IMPORTANT) ----------------
+
+// This does NOT transfer tokens
+// Backend should mint/transfer tokens separately
+
+export circuit recordBuy(
+  token: ContractAddress
+): [] {
+  const key = disclose(token);
+
+  tokenExists(token);
+
+  assert(_saleActive.lookup(key), "Sale not active");
+
+  const prev = _buyers.lookup(key);
+  _buyers.insert(key, prev + 1 as Uint<64>);
+
+  return [];
+}
+
+// ---------------- METADATA ----------------
 
 export circuit setMetadata(
   token: ContractAddress,
@@ -64,62 +150,77 @@ export circuit setMetadata(
   description: Bytes<128>
 ): [] {
   const key = disclose(token);
-  assert(_creator.member(key), "TokenFactory: unknown token");
-  assert(_active.lookup(key), "TokenFactory: token not active");
-  assert(_creator.lookup(key) == ownPublicKey(), "TokenFactory: not creator");
+
+  tokenExists(token);
+  onlyCreator(token);
+
+  assert(_active.lookup(key), "Inactive");
 
   _imageUri.insert(key, disclose(imageUri));
   _description.insert(key, disclose(description));
+
   return [];
 }
 
 export circuit deactivate(token: ContractAddress): [] {
   const key = disclose(token);
-  assert(_creator.member(key), "TokenFactory: unknown token");
-  assert(_creator.lookup(key) == ownPublicKey(), "TokenFactory: not creator");
+
+  tokenExists(token);
+  onlyCreator(token);
+
   _active.insert(key, false);
+
   return [];
 }
 
-// Read helpers
-export circuit nameOf(token: ContractAddress): Bytes<32> {
-  const key = disclose(token);
-  assert(_name.member(key), "TokenFactory: unknown token");
-  return _name.lookup(key);
+// ---------------- READ ----------------
+
+export circuit tokenCount(): Uint<64> {
+  return _tokenCount;
 }
 
-export circuit symbolOf(token: ContractAddress): Bytes<16> {
-  const key = disclose(token);
-  assert(_symbol.member(key), "TokenFactory: unknown token");
-  return _symbol.lookup(key);
-}
-
-export circuit imageUriOf(token: ContractAddress): Bytes<64> {
-  const key = disclose(token);
-  assert(_imageUri.member(key), "TokenFactory: unknown token");
-  return _imageUri.lookup(key);
-}
-
-export circuit descriptionOf(token: ContractAddress): Bytes<128> {
-  const key = disclose(token);
-  assert(_description.member(key), "TokenFactory: unknown token");
-  return _description.lookup(key);
+export circuit tokenAt(index: Uint<64>): ContractAddress {
+  const idx = disclose(index);
+  assert(_tokenByIndex.member(idx), "Out of bounds");
+  return _tokenByIndex.lookup(idx);
 }
 
 export circuit creatorOf(token: ContractAddress): ZswapCoinPublicKey {
-  const key = disclose(token);
-  assert(_creator.member(key), "TokenFactory: unknown token");
-  return _creator.lookup(key);
-}
-
-export circuit totalSupplyOf(token: ContractAddress): Uint<128> {
-  const key = disclose(token);
-  assert(_totalSupply.member(key), "TokenFactory: unknown token");
-  return _totalSupply.lookup(key);
+  return _creator.lookup(disclose(token));
 }
 
 export circuit isActive(token: ContractAddress): Boolean {
-  const key = disclose(token);
-  assert(_active.member(key), "TokenFactory: unknown token");
-  return _active.lookup(key);
+  return _active.lookup(disclose(token));
+}
+
+export circuit isSaleActive(token: ContractAddress): Boolean {
+  return _saleActive.lookup(disclose(token));
+}
+
+export circuit priceOf(token: ContractAddress): Uint<128> {
+  return _price.lookup(disclose(token));
+}
+
+export circuit buyersOf(token: ContractAddress): Uint<64> {
+  return _buyers.lookup(disclose(token));
+}
+
+export circuit nameOf(token: ContractAddress): Bytes<32> {
+  return _name.lookup(disclose(token));
+}
+
+export circuit symbolOf(token: ContractAddress): Bytes<16> {
+  return _symbol.lookup(disclose(token));
+}
+
+export circuit imageUriOf(token: ContractAddress): Bytes<64> {
+  return _imageUri.lookup(disclose(token));
+}
+
+export circuit descriptionOf(token: ContractAddress): Bytes<128> {
+  return _description.lookup(disclose(token));
+}
+
+export circuit totalSupplyOf(token: ContractAddress): Uint<128> {
+  return _totalSupply.lookup(disclose(token));
 }

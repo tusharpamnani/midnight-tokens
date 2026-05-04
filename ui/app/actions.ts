@@ -82,48 +82,20 @@ export async function actionDeployFactory() {
   return await runCli(["deploy-factory"]);
 }
 
-export async function actionFactoryCreateToken(params: {
-  factoryAddress: string;
-  name: string;
-  symbol: string;
-  decimals: string;
-  supply: string;
-  imageUri?: string;
-  description?: string;
-}) {
-  const args = [
-    "factory-create-token",
-    params.factoryAddress,
-    params.name,
-    params.symbol,
-    params.decimals,
-    params.supply,
-  ];
-  if (params.imageUri) args.push(params.imageUri);
-  if (params.description) args.push(params.description);
-  return await runCli(args);
-}
-
-export async function actionMint(params: {
-  tokenAddress: string;
-  to: string;
-  amount: string;
-}) {
+export async function actionMint(params: { tokenAddress: string; to: string; amount: string }) {
   return await runCli(["mint", params.to, params.amount, "--token", params.tokenAddress]);
 }
 
-export async function actionTransfer(params: {
-  tokenAddress: string;
-  to: string;
-  amount: string;
-}) {
-  return await runCli([
-    "transfer",
-    params.to,
-    params.amount,
-    "--token",
-    params.tokenAddress,
-  ]);
+export async function actionTransfer(params: { tokenAddress: string; to: string; amount: string }) {
+  return await runCli(["transfer", params.to, params.amount, "--token", params.tokenAddress]);
+}
+
+export async function actionBurn(params: { tokenAddress: string; amount: string }) {
+  return await runCli(["burn", params.amount, "--token", params.tokenAddress]);
+}
+
+export async function actionFinishMinting(params: { tokenAddress: string }) {
+  return await runCli(["finish-minting", "--token", params.tokenAddress]);
 }
 
 export async function actionTotalSupply(tokenAddress: string) {
@@ -131,16 +103,8 @@ export async function actionTotalSupply(tokenAddress: string) {
   return stdout.trim().split("\n").pop() || "";
 }
 
-export async function actionBalanceOf(params: {
-  tokenAddress: string;
-  account: string;
-}) {
-  const { stdout } = await runCli([
-    "balance-of",
-    params.account,
-    "--token",
-    params.tokenAddress,
-  ]);
+export async function actionBalanceOf(params: { tokenAddress: string; account: string }) {
+  const { stdout } = await runCli(["balance-of", params.account, "--token", params.tokenAddress]);
   return stdout.trim().split("\n").pop() || "";
 }
 
@@ -172,4 +136,3 @@ export async function actionFactoryListTokens(factoryAddress: string) {
   }
   return tokens;
 }
-

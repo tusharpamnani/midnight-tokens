@@ -1,199 +1,123 @@
 pragma language_version >= 0.21.0;
 
 import CompactStandardLibrary;
+import "../compact-contracts/contracts/src/token/FungibleToken" prefix FungibleToken_;
 
 export { ZswapCoinPublicKey, ContractAddress, Either };
 
 // ---------------- STORAGE ----------------
 
-// Token registry
-export ledger _tokenCount: Uint<64>;
-export ledger _tokenByIndex: Map<Uint<64>, ContractAddress>;
-
-export ledger _name: Map<ContractAddress, Bytes<32>>;
-export ledger _symbol: Map<ContractAddress, Bytes<16>>;
-export ledger _imageUri: Map<ContractAddress, Bytes<64>>;
-export ledger _description: Map<ContractAddress, Bytes<128>>;
-export ledger _creator: Map<ContractAddress, ZswapCoinPublicKey>;
-export ledger _totalSupply: Map<ContractAddress, Uint<128>>;
-export ledger _active: Map<ContractAddress, Boolean>;
-
-// Sale logic
-export ledger _price: Map<ContractAddress, Uint<128>>;
-export ledger _raised: Map<ContractAddress, Uint<128>>;
-export ledger _saleActive: Map<ContractAddress, Boolean>;
-
-// Analytics
-export ledger _volume: Map<ContractAddress, Uint<128>>;
-export ledger _buyers: Map<ContractAddress, Uint<64>>;
-
-// Platform
-export ledger _platformFeePercent: Uint<128>;
+// Ownership
 export ledger _owner: ZswapCoinPublicKey;
+
+// Supply control
+export ledger _maxSupply: Uint<128>;
+export ledger _mintingFinished: Boolean;
 
 // ---------------- CONSTRUCTOR ----------------
 
-constructor() {
-  _tokenCount = 0;
+constructor(
+  name_: Opaque<"string">,
+  symbol_: Opaque<"string">,
+  decimals_: Uint<8>,
+  initialSupply: Uint<128>,
+  maxSupply_: Uint<128>
+) {
+  FungibleToken_initialize(name_, symbol_, decimals_);
+
   _owner = ownPublicKey();
-  _platformFeePercent = 2; // 2%
+  _maxSupply = disclose(maxSupply_);
+  _mintingFinished = false;
+
+  const owner = left<ZswapCoinPublicKey, ContractAddress>(_owner);
+
+  // Safety checks
+  assert(initialSupply <= maxSupply_, "Initial > max supply");
+
+  // Mint initial supply
+  FungibleToken__mint(owner, initialSupply);
 }
 
-// ---------------- TOKEN REGISTRATION ----------------
+// ---------------- MODIFIERS ----------------
 
-export circuit registerToken(
-  token: ContractAddress,
-  name: Bytes<32>,
-  symbol: Bytes<16>,
-  imageUri: Bytes<64>,
-  description: Bytes<128>,
-  totalSupply: Uint<128>
-): [] {
-  const key = disclose(token);
-
-  assert(!_creator.member(key), "Already registered");
-
-  _name.insert(key, disclose(name));
-  _symbol.insert(key, disclose(symbol));
-  _imageUri.insert(key, disclose(imageUri));
-  _description.insert(key, disclose(description));
-  _creator.insert(key, ownPublicKey());
-  _totalSupply.insert(key, disclose(totalSupply));
-  _active.insert(key, true);
-
-  // Initialize sale + analytics state to safe defaults.
-  _price.insert(key, 0 as Uint<128>);
-  _raised.insert(key, 0 as Uint<128>);
-  _saleActive.insert(key, false);
-  _volume.insert(key, 0 as Uint<128>);
-  _buyers.insert(key, 0 as Uint<64>);
-
-  _tokenByIndex.insert(_tokenCount, key);
-  _tokenCount = _tokenCount + 1 as Uint<64>;
-
+circuit onlyOwner(): [] {
+  assert(ownPublicKey() == _owner, "Not owner");
   return [];
 }
 
-// ---------------- SALE LOGIC ----------------
-
-export circuit startSale(
-  token: ContractAddress,
-  price: Uint<128>
-): [] {
-  const key = disclose(token);
-
-  assert(_creator.lookup(key) == ownPublicKey(), "Not creator");
-  assert(_active.lookup(key), "Inactive token");
-
-  _price.insert(key, disclose(price));
-  _saleActive.insert(key, true);
-
+circuit canMint(): [] {
+  assert(!_mintingFinished, "Minting finished");
   return [];
 }
 
-export circuit buy(
-  token: ContractAddress,
+// ---------------- CORE TOKEN FUNCTIONS ----------------
+
+// Mint new tokens (owner only)
+export circuit mint(
+  to: Either<ZswapCoinPublicKey, ContractAddress>,
   amount: Uint<128>
 ): [] {
-  const key = disclose(token);
+  onlyOwner();
+  canMint();
 
-  assert(_saleActive.lookup(key), "Sale not active");
+  const newSupply = FungibleToken_totalSupply() + amount;
+  assert(newSupply <= _maxSupply, "Max supply exceeded");
 
-  const price = _price.lookup(key);
-  // NOTE: Multiplication over Uint values is checked at compile-time and can
-  // overflow. Keep cost calculations off-chain for now.
-  const cost = price;
+  return FungibleToken__mint(to, amount);
+}
 
-  // NOTE:
-  // Payment handling must be done OFF-CHAIN or via native token system
-
-  // Platform fee
-  // NOTE: Compact currently does not support division (/) in expressions.
-  // Keep fee logic off-chain for now.
-  const fee = 0 as Uint<128>;
-  const net = cost - fee;
-
-  // Update stats
-  // NOTE: Avoid Uint overflow-checked addition in on-chain analytics.
-  _raised.insert(key, net);
-  _volume.insert(key, cost);
-  _buyers.insert(key, 1 as Uint<64>);
-
+// Permanently stop minting (anti-rug feature)
+export circuit finishMinting(): [] {
+  onlyOwner();
+  _mintingFinished = true;
   return [];
 }
 
-export circuit endSale(token: ContractAddress): [] {
-  const key = disclose(token);
+// Burn tokens (caller burns their own tokens)
+export circuit burn(amount: Uint<128>): [] {
+  return FungibleToken__burn(
+    left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey()),
+    amount
+  );
+}
 
-  assert(_creator.lookup(key) == ownPublicKey(), "Not creator");
+// Transfer tokens
+export circuit transfer(
+  to: Either<ZswapCoinPublicKey, ContractAddress>,
+  amount: Uint<128>
+): Boolean {
+  return FungibleToken_transfer(to, amount);
+}
 
-  _saleActive.insert(key, false);
+// ---------------- OPTIONAL (ADMIN CONTROL) ----------------
 
+// Transfer ownership
+export circuit transferOwnership(newOwner: ZswapCoinPublicKey): [] {
+  onlyOwner();
+  _owner = disclose(newOwner);
   return [];
 }
 
-// ---------------- METADATA ----------------
+// ---------------- READ FUNCTIONS ----------------
 
-export circuit setMetadata(
-  token: ContractAddress,
-  imageUri: Bytes<64>,
-  description: Bytes<128>
-): [] {
-  const key = disclose(token);
-
-  assert(_creator.lookup(key) == ownPublicKey(), "Not creator");
-  assert(_active.lookup(key), "Inactive");
-
-  _imageUri.insert(key, disclose(imageUri));
-  _description.insert(key, disclose(description));
-
-  return [];
+export circuit totalSupply(): Uint<128> {
+  return FungibleToken_totalSupply();
 }
 
-export circuit deactivate(token: ContractAddress): [] {
-  const key = disclose(token);
-
-  assert(_creator.lookup(key) == ownPublicKey(), "Not creator");
-
-  _active.insert(key, false);
-
-  return [];
+export circuit balanceOf(
+  account: Either<ZswapCoinPublicKey, ContractAddress>
+): Uint<128> {
+  return FungibleToken_balanceOf(account);
 }
 
-// ---------------- READ ----------------
-
-export circuit tokenCount(): Uint<64> {
-  return _tokenCount;
+export circuit owner(): ZswapCoinPublicKey {
+  return _owner;
 }
 
-export circuit tokenAt(index: Uint<64>): ContractAddress {
-  const idx = disclose(index);
-
-  assert(_tokenByIndex.member(idx), "Out of bounds");
-
-  return _tokenByIndex.lookup(idx);
+export circuit maxSupply(): Uint<128> {
+  return _maxSupply;
 }
 
-export circuit priceOf(token: ContractAddress): Uint<128> {
-  return _price.lookup(disclose(token));
-}
-
-export circuit raisedOf(token: ContractAddress): Uint<128> {
-  return _raised.lookup(disclose(token));
-}
-
-export circuit volumeOf(token: ContractAddress): Uint<128> {
-  return _volume.lookup(disclose(token));
-}
-
-export circuit buyersOf(token: ContractAddress): Uint<64> {
-  return _buyers.lookup(disclose(token));
-}
-
-export circuit isSaleActive(token: ContractAddress): Boolean {
-  return _saleActive.lookup(disclose(token));
-}
-
-export circuit creatorOf(token: ContractAddress): ZswapCoinPublicKey {
-  return _creator.lookup(disclose(token));
+export circuit mintingFinished(): Boolean {
+  return _mintingFinished;
 }

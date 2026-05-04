@@ -5,10 +5,11 @@ import WalletConnect from '../components/WalletConnect';
 import { useWallet } from '../hooks/useWallet';
 import {
   actionBalanceOf,
+  actionBurn,
   actionDeployFactory,
   actionDeployToken,
-  actionFactoryCreateToken,
   actionFactoryListTokens,
+  actionFinishMinting,
   actionMint,
   actionTotalSupply,
   actionTransfer,
@@ -29,18 +30,12 @@ type FactoryTokenMeta = {
   raw?: string;
 };
 
-function Card(props: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-}) {
+function Card(props: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <section className="border border-white/[0.06] bg-black/30 p-6 space-y-4">
       <div className="space-y-1">
         {props.subtitle ? (
-          <div className="text-[10px] tracking-[0.25em] uppercase text-zinc-600 font-mono">
-            {props.subtitle}
-          </div>
+          <div className="text-[10px] tracking-[0.25em] uppercase text-zinc-600 font-mono">{props.subtitle}</div>
         ) : null}
         <h2 className="text-lg font-bold font-mono text-white">{props.title}</h2>
       </div>
@@ -54,39 +49,21 @@ export default function Home() {
 
   const [deployment, setDeployment] = useState<any>(null);
   const [factoryDeployment, setFactoryDeployment] = useState<any>(null);
-  const [walletInfo, setWalletInfo] = useState<{
-    coinKey: string | null;
-    address: string | null;
-  } | null>(null);
+  const [walletInfo, setWalletInfo] = useState<{ coinKey: string | null; address: string | null } | null>(null);
   const [logs, setLogs] = useState<string>('');
 
   const [factoryAddress, setFactoryAddress] = useState<string>('');
   const [tokens, setTokens] = useState<FactoryTokenMeta[]>([]);
   const [selectedToken, setSelectedToken] = useState<string>('');
 
-  const [createForm, setCreateForm] = useState({
-    name: 'MyToken',
-    symbol: 'MTK',
-    decimals: '18',
-    supply: '1000000',
-    imageUri: '',
-    description: '',
-  });
-
-  const [mintForm, setMintForm] = useState({
-    to: '',
-    amount: '100',
-  });
-
-  const [transferForm, setTransferForm] = useState({
-    to: '',
-    amount: '1',
-  });
-
   const [balanceAccount, setBalanceAccount] = useState('');
   const [balanceValue, setBalanceValue] = useState<string>('');
   const [totalSupplyValue, setTotalSupplyValue] = useState<string>('');
   const [isBusy, setIsBusy] = useState(false);
+
+  const [mintForm, setMintForm] = useState({ to: '', amount: '100' });
+  const [transferForm, setTransferForm] = useState({ to: '', amount: '1' });
+  const [burnAmount, setBurnAmount] = useState('1');
 
   const activeFactoryAddress = useMemo(() => {
     return factoryAddress || factoryDeployment?.factoryAddress || '';
@@ -130,12 +107,8 @@ export default function Home() {
 
   useEffect(() => {
     const activeCoinKey = coinPublicKey ?? walletInfo?.coinKey ?? null;
-    if (activeCoinKey && !mintForm.to) {
-      setMintForm((v) => ({ ...v, to: `coin:${activeCoinKey}` }));
-    }
-    if (activeCoinKey && !balanceAccount) {
-      setBalanceAccount(`coin:${activeCoinKey}`);
-    }
+    if (activeCoinKey && !mintForm.to) setMintForm((v) => ({ ...v, to: `coin:${activeCoinKey}` }));
+    if (activeCoinKey && !balanceAccount) setBalanceAccount(`coin:${activeCoinKey}`);
   }, [coinPublicKey, walletInfo, mintForm.to, balanceAccount]);
 
   async function run(fn: () => Promise<any>) {
@@ -176,7 +149,9 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-5">
             <div className="text-xs font-mono text-zinc-500">
-              {connectedAddress || walletInfo?.address ? `Wallet: ${connectedAddress || walletInfo?.address}` : 'Wallet: (not connected)'}
+              {connectedAddress || walletInfo?.address
+                ? `Wallet: ${connectedAddress || walletInfo?.address}`
+                : 'Wallet: (not connected)'}
             </div>
             <WalletConnect />
           </div>
@@ -189,15 +164,11 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div className="space-y-1">
                 <div className="text-zinc-500 font-mono text-xs">deployment.json</div>
-                <div className="font-mono break-all">
-                  {deployment?.contractAddress || '(not deployed)'}
-                </div>
+                <div className="font-mono break-all">{deployment?.contractAddress || '(not deployed)'}</div>
               </div>
               <div className="space-y-1">
                 <div className="text-zinc-500 font-mono text-xs">factory-deployment.json</div>
-                <div className="font-mono break-all">
-                  {factoryDeployment?.factoryAddress || '(not deployed)'}
-                </div>
+                <div className="font-mono break-all">{factoryDeployment?.factoryAddress || '(not deployed)'}</div>
               </div>
             </div>
 
@@ -207,7 +178,7 @@ export default function Home() {
                 onClick={() => run(() => actionDeployToken())}
                 className="px-4 py-2 border border-white/[0.08] hover:border-white/20 transition font-mono text-xs"
               >
-                Deploy Token (base)
+                Deploy Token
               </button>
               <button
                 disabled={isBusy}
@@ -218,10 +189,12 @@ export default function Home() {
               </button>
               <button
                 disabled={isBusy}
-                onClick={() => run(async () => {
-                  await refresh();
-                  await refreshTokens();
-                })}
+                onClick={() =>
+                  run(async () => {
+                    await refresh();
+                    await refreshTokens();
+                  })
+                }
                 className="px-4 py-2 border border-white/[0.08] hover:border-white/20 transition font-mono text-xs"
               >
                 Refresh
@@ -231,9 +204,7 @@ export default function Home() {
 
           <Card title="Factory" subtitle="02 / Registry">
             <div className="space-y-3">
-              <label className="block text-xs font-mono text-zinc-500">
-                Factory Address
-              </label>
+              <label className="block text-xs font-mono text-zinc-500">Factory Address</label>
               <input
                 value={activeFactoryAddress}
                 onChange={(e) => setFactoryAddress(e.target.value.trim())}
@@ -252,14 +223,10 @@ export default function Home() {
             </div>
 
             <div className="pt-4 space-y-2">
-              <div className="text-xs font-mono text-zinc-500">
-                Registered Tokens
-              </div>
+              <div className="text-xs font-mono text-zinc-500">Registered Tokens</div>
               <div className="grid grid-cols-1 gap-2">
                 {tokens.length === 0 ? (
-                  <div className="text-xs text-zinc-600 font-mono">
-                    No tokens loaded.
-                  </div>
+                  <div className="text-xs text-zinc-600 font-mono">No tokens loaded.</div>
                 ) : (
                   tokens.map((t) => (
                     <button
@@ -283,116 +250,32 @@ export default function Home() {
             </div>
           </Card>
 
-          <Card title="Create Token" subtitle="03 / Deploy + Register">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input
-                className="bg-black/40 border border-white/[0.08] px-3 py-2 font-mono text-xs"
-                value={createForm.name}
-                onChange={(e) =>
-                  setCreateForm((v) => ({ ...v, name: e.target.value }))
-                }
-                placeholder="Name"
-              />
-              <input
-                className="bg-black/40 border border-white/[0.08] px-3 py-2 font-mono text-xs"
-                value={createForm.symbol}
-                onChange={(e) =>
-                  setCreateForm((v) => ({ ...v, symbol: e.target.value }))
-                }
-                placeholder="Symbol"
-              />
-              <input
-                className="bg-black/40 border border-white/[0.08] px-3 py-2 font-mono text-xs"
-                value={createForm.decimals}
-                onChange={(e) =>
-                  setCreateForm((v) => ({ ...v, decimals: e.target.value }))
-                }
-                placeholder="Decimals (e.g. 18)"
-              />
-              <input
-                className="bg-black/40 border border-white/[0.08] px-3 py-2 font-mono text-xs"
-                value={createForm.supply}
-                onChange={(e) =>
-                  setCreateForm((v) => ({ ...v, supply: e.target.value }))
-                }
-                placeholder="Initial Supply"
-              />
-              <input
-                className="md:col-span-2 bg-black/40 border border-white/[0.08] px-3 py-2 font-mono text-xs"
-                value={createForm.imageUri}
-                onChange={(e) =>
-                  setCreateForm((v) => ({ ...v, imageUri: e.target.value }))
-                }
-                placeholder="Image URI (optional)"
-              />
-              <textarea
-                className="md:col-span-2 bg-black/40 border border-white/[0.08] px-3 py-2 font-mono text-xs min-h-[80px]"
-                value={createForm.description}
-                onChange={(e) =>
-                  setCreateForm((v) => ({ ...v, description: e.target.value }))
-                }
-                placeholder="Description (optional)"
-              />
-            </div>
-            <div className="pt-3">
-              <button
-                disabled={isBusy || !activeFactoryAddress}
-                onClick={() =>
-                  run(async () => {
-                    const res = await actionFactoryCreateToken({
-                      factoryAddress: activeFactoryAddress,
-                      name: createForm.name,
-                      symbol: createForm.symbol,
-                      decimals: createForm.decimals,
-                      supply: createForm.supply,
-                      imageUri: createForm.imageUri,
-                      description: createForm.description,
-                    });
-                    await refreshTokens();
-                    return res;
-                  })
-                }
-                className="px-4 py-2 border border-white/[0.08] hover:border-white/20 transition font-mono text-xs"
-              >
-                Create Token
-              </button>
-            </div>
-          </Card>
-
-          <Card title="Token Actions" subtitle="04 / Mint · Transfer · Query">
+          <Card title="Token" subtitle="03 / Mint + Transfer + Burn">
             <div className="space-y-4">
-              <div className="space-y-1">
-                <div className="text-xs font-mono text-zinc-500">Selected Token</div>
+              <div>
+                <div className="text-xs font-mono text-zinc-500 mb-1">Selected Token Address</div>
                 <input
                   value={selectedToken}
                   onChange={(e) => setSelectedToken(e.target.value.trim())}
-                  placeholder="token address hex (64 hex chars)"
+                  placeholder="token address hex (64-hex, no 0x)"
                   className="w-full bg-black/40 border border-white/[0.08] px-3 py-2 font-mono text-xs"
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="flex flex-wrap gap-3">
                 <button
                   disabled={isBusy || !selectedToken}
-                  onClick={() =>
-                    run(async () =>
-                      setTotalSupplyValue(await actionTotalSupply(selectedToken)),
-                    )
-                  }
+                  onClick={() => run(async () => setTotalSupplyValue(await actionTotalSupply(selectedToken)))}
                   className="px-4 py-2 border border-white/[0.08] hover:border-white/20 transition font-mono text-xs"
                 >
-                  Get Total Supply
+                  Total Supply
                 </button>
-                <div className="font-mono text-xs text-zinc-400 flex items-center">
-                  {totalSupplyValue ? `totalSupply=${totalSupplyValue}` : ''}
-                </div>
+                <div className="text-xs font-mono text-zinc-400">{totalSupplyValue ? `totalSupply=${totalSupplyValue}` : ''}</div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
                 <div>
-                  <div className="text-xs font-mono text-zinc-500 mb-1">
-                    Balance Account
-                  </div>
+                  <div className="text-xs font-mono text-zinc-500 mb-1">Balance Account</div>
                   <input
                     value={balanceAccount}
                     onChange={(e) => setBalanceAccount(e.target.value)}
@@ -403,54 +286,33 @@ export default function Home() {
                 <button
                   disabled={isBusy || !selectedToken || !balanceAccount}
                   onClick={() =>
-                    run(async () =>
-                      setBalanceValue(
-                        await actionBalanceOf({
-                          tokenAddress: selectedToken,
-                          account: balanceAccount,
-                        }),
-                      ),
-                    )
+                    run(async () => setBalanceValue(await actionBalanceOf({ tokenAddress: selectedToken, account: balanceAccount })))
                   }
                   className="px-4 py-2 border border-white/[0.08] hover:border-white/20 transition font-mono text-xs"
                 >
-                  Get Balance
+                  Balance Of
                 </button>
-                <div className="md:col-span-2 font-mono text-xs text-zinc-400">
-                  {balanceValue ? `balance=${balanceValue}` : ''}
-                </div>
+                <div className="md:col-span-2 font-mono text-xs text-zinc-400">{balanceValue ? `balance=${balanceValue}` : ''}</div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <div className="text-xs font-mono text-zinc-500">Mint</div>
+                  <div className="text-xs font-mono text-zinc-500">Mint (owner only)</div>
                   <input
                     className="bg-black/40 border border-white/[0.08] px-3 py-2 font-mono text-xs"
                     value={mintForm.to}
-                    onChange={(e) =>
-                      setMintForm((v) => ({ ...v, to: e.target.value }))
-                    }
+                    onChange={(e) => setMintForm((v) => ({ ...v, to: e.target.value }))}
                     placeholder="coin:<64-hex>"
                   />
                   <input
                     className="bg-black/40 border border-white/[0.08] px-3 py-2 font-mono text-xs"
                     value={mintForm.amount}
-                    onChange={(e) =>
-                      setMintForm((v) => ({ ...v, amount: e.target.value }))
-                    }
+                    onChange={(e) => setMintForm((v) => ({ ...v, amount: e.target.value }))}
                     placeholder="amount"
                   />
                   <button
                     disabled={isBusy || !selectedToken || !mintForm.to || !mintForm.amount}
-                    onClick={() =>
-                      run(() =>
-                        actionMint({
-                          tokenAddress: selectedToken,
-                          to: mintForm.to,
-                          amount: mintForm.amount,
-                        }),
-                      )
-                    }
+                    onClick={() => run(() => actionMint({ tokenAddress: selectedToken, to: mintForm.to, amount: mintForm.amount }))}
                     className="w-full px-4 py-2 border border-white/[0.08] hover:border-white/20 transition font-mono text-xs"
                   >
                     Mint
@@ -461,35 +323,51 @@ export default function Home() {
                   <input
                     className="bg-black/40 border border-white/[0.08] px-3 py-2 font-mono text-xs"
                     value={transferForm.to}
-                    onChange={(e) =>
-                      setTransferForm((v) => ({ ...v, to: e.target.value }))
-                    }
+                    onChange={(e) => setTransferForm((v) => ({ ...v, to: e.target.value }))}
                     placeholder="coin:<64-hex>"
                   />
                   <input
                     className="bg-black/40 border border-white/[0.08] px-3 py-2 font-mono text-xs"
                     value={transferForm.amount}
-                    onChange={(e) =>
-                      setTransferForm((v) => ({ ...v, amount: e.target.value }))
-                    }
+                    onChange={(e) => setTransferForm((v) => ({ ...v, amount: e.target.value }))}
                     placeholder="amount"
                   />
                   <button
                     disabled={isBusy || !selectedToken || !transferForm.to || !transferForm.amount}
                     onClick={() =>
-                      run(() =>
-                        actionTransfer({
-                          tokenAddress: selectedToken,
-                          to: transferForm.to,
-                          amount: transferForm.amount,
-                        }),
-                      )
+                      run(() => actionTransfer({ tokenAddress: selectedToken, to: transferForm.to, amount: transferForm.amount }))
                     }
                     className="w-full px-4 py-2 border border-white/[0.08] hover:border-white/20 transition font-mono text-xs"
                   >
                     Transfer
                   </button>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                <div>
+                  <div className="text-xs font-mono text-zinc-500 mb-1">Burn Amount</div>
+                  <input
+                    className="w-full bg-black/40 border border-white/[0.08] px-3 py-2 font-mono text-xs"
+                    value={burnAmount}
+                    onChange={(e) => setBurnAmount(e.target.value)}
+                    placeholder="amount"
+                  />
+                </div>
+                <button
+                  disabled={isBusy || !selectedToken || !burnAmount}
+                  onClick={() => run(() => actionBurn({ tokenAddress: selectedToken, amount: burnAmount }))}
+                  className="px-4 py-2 border border-white/[0.08] hover:border-white/20 transition font-mono text-xs"
+                >
+                  Burn
+                </button>
+                <button
+                  disabled={isBusy || !selectedToken}
+                  onClick={() => run(() => actionFinishMinting({ tokenAddress: selectedToken }))}
+                  className="px-4 py-2 border border-red-500/30 hover:border-red-500/60 transition font-mono text-xs text-red-200"
+                >
+                  Finish Minting
+                </button>
               </div>
             </div>
           </Card>
@@ -506,3 +384,4 @@ export default function Home() {
     </main>
   );
 }
+
