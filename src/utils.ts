@@ -62,44 +62,43 @@ export const CONFIG = {
   proofServer: process.env.MIDNIGHT_PROOF_SERVER?.trim() || DEFAULTS.proofServer,
 } as const;
 
+export const FUNGIBLE_CONTRACT_PATH = path.resolve(cwd(), 'contracts', 'managed', 'Fungible');
+export const FACTORY_CONTRACT_PATH = path.resolve(cwd(), 'contracts', 'managed', 'TokenFactory');
+
 async function getContractBundle(contractName: string) {
   ensureCompiledArtifacts();
-  
-  let relativePath: string;
-  if (contractName === 'token') {
-    relativePath = path.join('contract', 'contract', 'index.js');
-  } else if (contractName === 'factory') {
-    relativePath = path.join('factory', 'contract', 'index.js');
-  } else {
-    throw new Error(`Unknown contract: ${contractName}`);
-  }
-  
-  const contractPath = pathToFileURL(path.join(MANAGED_CONTRACTS_DIR, relativePath)).href;
-  const module = await import(contractPath);
-  
-  if (!module.Contract || !module.witnesses) {
-    throw new Error(`Artifacts for '${contractName}' missing 'Contract' or 'witnesses' export.`);
-  }
+
+  const pathMap: Record<string, string> = {
+    token: path.join(FUNGIBLE_CONTRACT_PATH, 'contract', 'index.js'),
+    factory: path.join(FACTORY_CONTRACT_PATH, 'contract', 'index.js'),
+  };
+
+  const contractPath = pathMap[contractName];
+  if (!contractPath) throw new Error(`Unknown contract: ${contractName}`);
+
+  const module = await import(pathToFileURL(contractPath).href);
+  if (!module.Contract) throw new Error(`Artifacts for '${contractName}' missing 'Contract' export.`);
   return module;
 }
 
 export async function getCompiledContract(contractName: string = 'token') {
-  const { Contract, witnesses } = await getContractBundle(contractName);
-  
-  // 1. Extract 'make' as any to allow 3 arguments
-  const make = CompiledContract.make as any;
-  
-  // 2. Perform the make call, cast the result to 'any' immediately, 
-  // then call pipe. This prevents the TS compiler from trying to 
-  // validate the argument types inside .pipe()
-  return (make(
-    contractName,
-    Contract,
-    witnesses
-  ) as any).pipe(
-    CompiledContract.withCompiledFileAssets(path.join(MANAGED_CONTRACTS_DIR, contractName))
+  const module = await getContractBundle(contractName);
+
+  const zkPathMap: Record<string, string> = {
+    token: FUNGIBLE_CONTRACT_PATH,
+    factory: FACTORY_CONTRACT_PATH,
+  };
+
+  const zkPath = zkPathMap[contractName];
+  if (!zkPath) throw new Error(`No zk path for: ${contractName}`);
+
+  // Mirror NFT launchpad exactly: witnesses as plain object, zkPath is the contract folder
+  return CompiledContract.make(contractName, module.Contract).pipe(
+    CompiledContract.withWitnesses(module.witnesses ?? (module.Contract as any).witnesses ?? {}),
+    CompiledContract.withCompiledFileAssets(zkPath),
   ) as any;
 }
+
 export function deriveKeys(seed: string) {
   const hdWallet = HDWallet.fromSeed(Buffer.from(seed, 'hex'));
   if (hdWallet.type !== 'seedOk') throw new Error('Invalid seed');
@@ -163,9 +162,7 @@ export async function createProviders(
   customZkPath?: string
 ) {
   const privateStatePassword = process.env.PRIVATE_STATE_PASSWORD?.trim();
-  if (!privateStatePassword) {
-    throw new Error('Missing PRIVATE_STATE_PASSWORD.');
-  }
+  if (!privateStatePassword) throw new Error('Missing PRIVATE_STATE_PASSWORD.');
 
   const state = await walletCtx.wallet.waitForSyncedState();
 
@@ -175,24 +172,19 @@ export async function createProviders(
     async balanceTx(tx: unknown, ttl?: Date) {
       const recipe = await walletCtx.wallet.balanceUnboundTransaction(
         tx as Parameters<typeof walletCtx.wallet.balanceUnboundTransaction>[0],
-        {
-          shieldedSecretKeys: walletCtx.shieldedSecretKeys,
-          dustSecretKey: walletCtx.dustSecretKey,
-        },
+        { shieldedSecretKeys: walletCtx.shieldedSecretKeys, dustSecretKey: walletCtx.dustSecretKey },
         { ttl: ttl ?? new Date(Date.now() + 30 * 60 * 1000) },
       );
-
       const signedRecipe = await walletCtx.wallet.signRecipe(recipe, (payload) =>
         walletCtx.unshieldedKeystore.signData(payload),
       );
-
       return walletCtx.wallet.finalizeRecipe(signedRecipe);
     },
-    submitTx: (tx: ledger.FinalizedTransaction) =>
-      walletCtx.wallet.submitTransaction(tx),
+    submitTx: (tx: ledger.FinalizedTransaction) => walletCtx.wallet.submitTransaction(tx),
   };
 
-  const finalZkPath = customZkPath || zkConfigPath;
+  // Pass contract folder — SDK appends /keys internally
+  const finalZkPath = customZkPath ?? FUNGIBLE_CONTRACT_PATH;
   const zkConfigProvider = new NodeZkConfigProvider(finalZkPath);
   const accountId = walletCtx.unshieldedKeystore.getBech32Address().toString();
 
@@ -202,10 +194,7 @@ export async function createProviders(
       accountId,
       privateStoragePasswordProvider: () => privateStatePassword,
     }),
-    publicDataProvider: indexerPublicDataProvider(
-      CONFIG.indexer,
-      CONFIG.indexerWS,
-    ),
+    publicDataProvider: indexerPublicDataProvider(CONFIG.indexer, CONFIG.indexerWS),
     zkConfigProvider,
     proofProvider: httpClientProofProvider(CONFIG.proofServer, zkConfigProvider),
     walletProvider,

@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import { deployContract } from '@midnight-ntwrk/midnight-js-contracts';
 import { createWallet, createProviders, getCompiledContract } from './utils.js';
+import * as path from 'node:path';
 
 export async function deploy(params: {
   seed: string;
@@ -14,8 +15,8 @@ export async function deploy(params: {
   const walletCtx = await createWallet(params.seed);
   await walletCtx.wallet.waitForSyncedState();
 
-  console.log('Setting up providers...');
-  const providers = await createProviders(walletCtx);
+console.log('Setting up providers...');
+const providers = await createProviders(walletCtx); // uses FUNGIBLE_CONTRACT_PATH by default
 
   // Load the token contract asynchronously
   console.log('Compiling contract assets...');
