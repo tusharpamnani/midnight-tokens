@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { fileURLToPath } from 'node:url';
@@ -43,22 +42,14 @@ function padBytes(spec: string, length: number) {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const factoryZkPath = path.resolve(__dirname, '..', 'contracts', 'managed', 'factory');
 
-async function getFactoryCompiledContract(walletAddressBech32: string) {
+async function getFactoryCompiledContract() {
   ensureFactoryArtifacts();
-  const callerAddressBytes = crypto
-    .createHash('sha256')
-    .update(walletAddressBech32)
-    .digest();
-
   const factoryModule = await import(
     pathToFileURL(path.join(factoryZkPath, 'contract', 'index.js')).href
   );
 
   const FactoryCtor = factoryModule.Contract as any;
   return CompiledContract.make('factory', FactoryCtor).pipe(
-    CompiledContract.withWitnesses({
-      callerAddress: (context: any) => [context.privateState as never, callerAddressBytes],
-    }),
     CompiledContract.withCompiledFileAssets(factoryZkPath),
   ) as any;
 }
@@ -67,12 +58,8 @@ export async function deployFactory(seed: string) {
   const walletCtx = await createWallet(seed);
   await walletCtx.wallet.waitForSyncedState();
 
-  const walletAddressString = walletCtx.unshieldedKeystore
-    .getBech32Address()
-    .toString();
-
   const providers = await createProviders(walletCtx, factoryZkPath);
-  const compiledFactory = await getFactoryCompiledContract(walletAddressString);
+  const compiledFactory = await getFactoryCompiledContract();
 
   const deployed = await deployContract(providers, {
     compiledContract: compiledFactory,
@@ -102,12 +89,8 @@ export async function registerTokenInFactory(params: {
   const walletCtx = await createWallet(params.seed);
   await walletCtx.wallet.waitForSyncedState();
 
-  const walletAddressString = walletCtx.unshieldedKeystore
-    .getBech32Address()
-    .toString();
-
   const providers = await createProviders(walletCtx, factoryZkPath);
-  const compiledFactory = await getFactoryCompiledContract(walletAddressString);
+  const compiledFactory = await getFactoryCompiledContract();
 
   const factory = await findDeployedContract(providers as any, {
     contractAddress: params.factoryAddress,
@@ -134,9 +117,8 @@ export async function registerTokenInFactory(params: {
 export async function factoryTokenCount(params: { seed: string; factoryAddress: string }) {
   const walletCtx = await createWallet(params.seed);
   await walletCtx.wallet.waitForSyncedState();
-  const walletAddressString = walletCtx.unshieldedKeystore.getBech32Address().toString();
   const providers = await createProviders(walletCtx, factoryZkPath);
-  const compiledFactory = await getFactoryCompiledContract(walletAddressString);
+  const compiledFactory = await getFactoryCompiledContract();
 
   const callData = await createUnprovenCallTx(providers as any, {
     compiledContract: compiledFactory,
@@ -155,9 +137,8 @@ export async function factoryTokenAt(params: {
 }) {
   const walletCtx = await createWallet(params.seed);
   await walletCtx.wallet.waitForSyncedState();
-  const walletAddressString = walletCtx.unshieldedKeystore.getBech32Address().toString();
   const providers = await createProviders(walletCtx, factoryZkPath);
-  const compiledFactory = await getFactoryCompiledContract(walletAddressString);
+  const compiledFactory = await getFactoryCompiledContract();
 
   const callData = await createUnprovenCallTx(providers as any, {
     compiledContract: compiledFactory,
@@ -178,9 +159,8 @@ export async function factoryTokenMetadata(params: {
 }) {
   const walletCtx = await createWallet(params.seed);
   await walletCtx.wallet.waitForSyncedState();
-  const walletAddressString = walletCtx.unshieldedKeystore.getBech32Address().toString();
   const providers = await createProviders(walletCtx, factoryZkPath);
-  const compiledFactory = await getFactoryCompiledContract(walletAddressString);
+  const compiledFactory = await getFactoryCompiledContract();
 
   const token = parseContractAddressHex(params.tokenAddress);
 

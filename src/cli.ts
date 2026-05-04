@@ -4,11 +4,21 @@ import { deploy } from './deploy.js';
 import { getOwnedTokens } from './state.js';
 import { ensureCompiledArtifacts } from './check-artifacts.js';
 import {
-  balanceOfFungible,
-  mintFungible,
-  totalSupplyFungible,
-  transferFungible,
-} from './fungible.js';
+  buyLaunchpad,
+  deactivateLaunchpad,
+  endSaleLaunchpad,
+  launchpadBuyersOf,
+  launchpadCreatorOf,
+  launchpadIsSaleActive,
+  launchpadPriceOf,
+  launchpadRaisedOf,
+  launchpadTokenAt,
+  launchpadTokenCount,
+  launchpadVolumeOf,
+  registerTokenLaunchpad,
+  setMetadataLaunchpad,
+  startSaleLaunchpad,
+} from './launchpad.js';
 import { createWallet } from './utils.js';
 import {
   deployFactory,
@@ -17,7 +27,6 @@ import {
   factoryTokenMetadata,
   registerTokenInFactory,
 } from './factory.js';
-import { deployTokenWithArgs } from './token.js';
 
 function getDeployment() {
   if (!fs.existsSync('deployment.json')) {
@@ -52,25 +61,30 @@ Usage:
   npm run cli -- <command> [args]
 
 Commands:
-  deploy                        Deploy the base contract
+  deploy                        Deploy the launchpad contract
   balance                       Show owned items from local state
   wallet-info                   Print wallet addresses/keys
-  mint <to> <amount>            Mint fungible tokens
-  transfer <to> <amount>        Transfer fungible tokens
-  balance-of <account>          Query token balance
-  total-supply                  Query total token supply
-  (use --token <addressHex> to target a specific token)
+  lp-register <token> <name> <symbol> <supply> [imageUri] [description]
+                               Register a token in the launchpad
+  lp-start-sale <token> <price> Start token sale
+  lp-buy <token> <amount>       Buy during token sale
+  lp-end-sale <token>           End token sale
+  lp-set-metadata <token> [imageUri] [description]
+                               Update stored metadata
+  lp-deactivate <token>         Deactivate token
+  lp-count                      Query launchpad token count
+  lp-token-at <i>               Get token at index
+  lp-price <token>              Query current price
+  lp-raised <token>             Query raised amount (net)
+  lp-volume <token>             Query volume
+  lp-buyers <token>             Query buyers count
+  lp-sale-active <token>        Query sale active flag
+  lp-creator <token>            Query creator coin public key
   deploy-factory                Deploy token registry ("factory")
   factory-count <factory>       Query factory token count
   factory-token-at <factory> <i>  Get token at index
   factory-meta <factory> <token>  Get stored token metadata (json)
   factory-register <factory> <token> <name> <symbol> <supply> [imageUri] [description]
-  factory-create-token <factory> <name> <symbol> <decimals> <supply> [imageUri] [description]
-
-Recipient format:
-  coin:<64-hex>                 Zswap coin public key (wallet)
-  contract:<64-hex>             Contract address
-  <64-hex>                      Defaults to coin:<64-hex>
     `);
     process.exit(0);
   }
@@ -115,77 +129,235 @@ Recipient format:
       }
 
       case 'mint': {
-        const to = args[1];
-        const amountStr = args[2];
-        if (!to || !amountStr) {
-          console.error('Usage: npm run cli -- mint <to> <amount>');
-          process.exit(1);
-        }
-
-        const deployment = getDeployment();
-        const seed = process.env.WALLET_SEED || deployment.seed;
-        const amount = BigInt(amountStr);
-        const contractAddress = tokenOverride || deployment.contractAddress;
-
-        await mintFungible({
-          seed,
-          contractAddress,
-          to,
-          amount,
-        });
-        break;
+        console.error('Command removed: mint (the on-chain contract no longer exposes mint).');
+        process.exit(1);
       }
 
       case 'transfer': {
-        const to = args[1];
-        const amountStr = args[2];
-        if (!to || !amountStr) {
-          console.error('Usage: npm run cli -- transfer <to> <amount>');
-          process.exit(1);
-        }
-
-        const deployment = getDeployment();
-        const seed = process.env.WALLET_SEED || deployment.seed;
-        const amount = BigInt(amountStr);
-        const contractAddress = tokenOverride || deployment.contractAddress;
-
-        await transferFungible({
-          seed,
-          contractAddress,
-          to,
-          amount,
-        });
-        break;
+        console.error('Command removed: transfer (the on-chain contract no longer exposes transfer).');
+        process.exit(1);
       }
 
       case 'balance-of': {
-        const account = args[1];
-        if (!account) {
-          console.error('Usage: npm run cli -- balance-of <account>');
+        console.error('Command removed: balance-of (the on-chain contract no longer exposes balances).');
+        process.exit(1);
+      }
+
+      case 'total-supply': {
+        console.error('Command removed: total-supply (the on-chain contract no longer exposes totalSupply).');
+        process.exit(1);
+      }
+
+      case 'lp-register': {
+        const token = args[1];
+        const name = args[2];
+        const symbol = args[3];
+        const supplyStr = args[4];
+        const imageUri = args[5] || '';
+        const description = args[6] || '';
+        if (!token || !name || !symbol || !supplyStr) {
+          console.error(
+            'Usage: npm run cli -- lp-register <tokenAddressHex> <name> <symbol> <supply> [imageUri] [description]',
+          );
           process.exit(1);
         }
 
         const deployment = getDeployment();
         const seed = process.env.WALLET_SEED || deployment.seed;
-        const contractAddress = tokenOverride || deployment.contractAddress;
 
-        await balanceOfFungible({
+        await registerTokenLaunchpad({
           seed,
-          contractAddress,
-          account,
+          launchpadAddress: deployment.contractAddress,
+          tokenAddress: token,
+          name,
+          symbol,
+          imageUri,
+          description,
+          totalSupply: BigInt(supplyStr),
         });
         break;
       }
 
-      case 'total-supply': {
+      case 'lp-start-sale': {
+        const token = args[1];
+        const priceStr = args[2];
+        if (!token || !priceStr) {
+          console.error('Usage: npm run cli -- lp-start-sale <tokenAddressHex> <price>');
+          process.exit(1);
+        }
         const deployment = getDeployment();
         const seed = process.env.WALLET_SEED || deployment.seed;
-        const contractAddress = tokenOverride || deployment.contractAddress;
-
-        await totalSupplyFungible({
+        await startSaleLaunchpad({
           seed,
-          contractAddress,
+          launchpadAddress: deployment.contractAddress,
+          tokenAddress: token,
+          price: BigInt(priceStr),
         });
+        break;
+      }
+
+      case 'lp-buy': {
+        const token = args[1];
+        const amountStr = args[2];
+        if (!token || !amountStr) {
+          console.error('Usage: npm run cli -- lp-buy <tokenAddressHex> <amount>');
+          process.exit(1);
+        }
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        await buyLaunchpad({
+          seed,
+          launchpadAddress: deployment.contractAddress,
+          tokenAddress: token,
+          amount: BigInt(amountStr),
+        });
+        break;
+      }
+
+      case 'lp-end-sale': {
+        const token = args[1];
+        if (!token) {
+          console.error('Usage: npm run cli -- lp-end-sale <tokenAddressHex>');
+          process.exit(1);
+        }
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        await endSaleLaunchpad({
+          seed,
+          launchpadAddress: deployment.contractAddress,
+          tokenAddress: token,
+        });
+        break;
+      }
+
+      case 'lp-set-metadata': {
+        const token = args[1];
+        const imageUri = args[2] || '';
+        const description = args[3] || '';
+        if (!token) {
+          console.error('Usage: npm run cli -- lp-set-metadata <tokenAddressHex> [imageUri] [description]');
+          process.exit(1);
+        }
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        await setMetadataLaunchpad({
+          seed,
+          launchpadAddress: deployment.contractAddress,
+          tokenAddress: token,
+          imageUri,
+          description,
+        });
+        break;
+      }
+
+      case 'lp-deactivate': {
+        const token = args[1];
+        if (!token) {
+          console.error('Usage: npm run cli -- lp-deactivate <tokenAddressHex>');
+          process.exit(1);
+        }
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        await deactivateLaunchpad({
+          seed,
+          launchpadAddress: deployment.contractAddress,
+          tokenAddress: token,
+        });
+        break;
+      }
+
+      case 'lp-count': {
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        await launchpadTokenCount({ seed, launchpadAddress: deployment.contractAddress });
+        break;
+      }
+
+      case 'lp-token-at': {
+        const indexStr = args[1];
+        if (!indexStr) {
+          console.error('Usage: npm run cli -- lp-token-at <index>');
+          process.exit(1);
+        }
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        await launchpadTokenAt({
+          seed,
+          launchpadAddress: deployment.contractAddress,
+          index: BigInt(indexStr),
+        });
+        break;
+      }
+
+      case 'lp-price': {
+        const token = args[1];
+        if (!token) {
+          console.error('Usage: npm run cli -- lp-price <tokenAddressHex>');
+          process.exit(1);
+        }
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        await launchpadPriceOf({ seed, launchpadAddress: deployment.contractAddress, tokenAddress: token });
+        break;
+      }
+
+      case 'lp-raised': {
+        const token = args[1];
+        if (!token) {
+          console.error('Usage: npm run cli -- lp-raised <tokenAddressHex>');
+          process.exit(1);
+        }
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        await launchpadRaisedOf({ seed, launchpadAddress: deployment.contractAddress, tokenAddress: token });
+        break;
+      }
+
+      case 'lp-volume': {
+        const token = args[1];
+        if (!token) {
+          console.error('Usage: npm run cli -- lp-volume <tokenAddressHex>');
+          process.exit(1);
+        }
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        await launchpadVolumeOf({ seed, launchpadAddress: deployment.contractAddress, tokenAddress: token });
+        break;
+      }
+
+      case 'lp-buyers': {
+        const token = args[1];
+        if (!token) {
+          console.error('Usage: npm run cli -- lp-buyers <tokenAddressHex>');
+          process.exit(1);
+        }
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        await launchpadBuyersOf({ seed, launchpadAddress: deployment.contractAddress, tokenAddress: token });
+        break;
+      }
+
+      case 'lp-sale-active': {
+        const token = args[1];
+        if (!token) {
+          console.error('Usage: npm run cli -- lp-sale-active <tokenAddressHex>');
+          process.exit(1);
+        }
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        await launchpadIsSaleActive({ seed, launchpadAddress: deployment.contractAddress, tokenAddress: token });
+        break;
+      }
+
+      case 'lp-creator': {
+        const token = args[1];
+        if (!token) {
+          console.error('Usage: npm run cli -- lp-creator <tokenAddressHex>');
+          process.exit(1);
+        }
+        const deployment = getDeployment();
+        const seed = process.env.WALLET_SEED || deployment.seed;
+        await launchpadCreatorOf({ seed, launchpadAddress: deployment.contractAddress, tokenAddress: token });
         break;
       }
 
@@ -281,48 +453,6 @@ Recipient format:
           imageUri,
           description,
           totalSupply: BigInt(supplyStr),
-        });
-        break;
-      }
-
-      case 'factory-create-token': {
-        const factory = args[1];
-        const name = args[2];
-        const symbol = args[3];
-        const decimalsStr = args[4];
-        const supplyStr = args[5];
-        const imageUri = args[6] || '';
-        const description = args[7] || '';
-        if (!factory || !name || !symbol || !decimalsStr || !supplyStr) {
-          console.error(
-            'Usage: npm run cli -- factory-create-token <factoryAddress> <name> <symbol> <decimals> <supply> [imageUri] [description]',
-          );
-          process.exit(1);
-        }
-
-        const deployment = getDeployment();
-        const seed = process.env.WALLET_SEED || deployment.seed;
-        const decimals = BigInt(decimalsStr);
-        const supply = BigInt(supplyStr);
-
-        const tokenAddress = await deployTokenWithArgs({
-          seed,
-          name,
-          symbol,
-          decimals,
-          initialSupply: supply,
-        });
-
-        // tokenAddress is returned as hex string. Register expects 64 hex chars.
-        await registerTokenInFactory({
-          seed,
-          factoryAddress: factory,
-          tokenAddress: tokenAddress.replace(/^0x/i, ''),
-          name,
-          symbol,
-          imageUri,
-          description,
-          totalSupply: supply,
         });
         break;
       }
